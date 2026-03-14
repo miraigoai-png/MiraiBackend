@@ -107,7 +107,7 @@ app.post("/api/heygen-token", async (_req, res) => {
         },
       }
     );
-    const data = await response.json();
+    const data = await response.json() as { data?: { token?: string } };
     res.json({ token: data.data?.token });
   } catch (error: any) {
     console.error("HeyGen token error:", error.message);
@@ -154,7 +154,10 @@ app.post("/api/liveavatar/token", async (req, res) => {
       }),
     });
 
-    const tokenData = await tokenRes.json();
+    const tokenData = await tokenRes.json() as {
+      code: number;
+      data: { session_token: string; session_id: string };
+    };
 
     if (tokenData.code !== 100 && tokenData.code !== 1000) {
       throw new Error(`Token creation failed: ${JSON.stringify(tokenData)}`);
