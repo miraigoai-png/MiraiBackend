@@ -17,6 +17,7 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static("public"));
 
 /**
  * ヘルスチェック
@@ -84,10 +85,97 @@ app.get("/api/history/:sessionId", (req, res) => {
   res.json({ history: session.getHistory(), sessionId: req.params.sessionId });
 });
 
+/**
+ * HeyGen アクセストークン生成（旧Streaming Avatar用、レガシー）
+ * POST /api/heygen-token
+ */
+app.post("/api/heygen-token", async (_req, res) => {
+  const heygenApiKey = process.env.HEYGEN_API_KEY;
+  if (!heygenApiKey) {
+    res.status(500).json({ error: "HEYGEN_API_KEY が設定されていません" });
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      "https://api.heygen.com/v1/streaming.create_token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Api-Key": heygenApiKey,
+        },
+      }
+    );
+    const data = await response.json();
+    res.json({ token: data.data?.token });
+  } catch (error: any) {
+    console.error("HeyGen token error:", error.message);
+    res.status(500).json({ error: "トークン生成に失敗しました" });
+  }
+});
+
+/**
+ * LiveAvatar セッショントークン生成
+ * SDKがセッション開始・LiveKit接続を自動管理するため、トークン生成のみ行う
+ *
+ * POST /api/liveavatar/token
+ * Body: { avatar_id?: string, sandbox?: boolean }
+ * Response: { session_token }
+ */
+app.post("/api/liveavatar/token", async (req, res) => {
+  const apiKey = process.env.LIVEAVATAR_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({ error: "LIVEAVATAR_API_KEY が設定されていません" });
+    return;
+  }
+
+  const { avatar_id, sandbox = true } = req.body || {};
+  // デフォルト: Wayne (サンドボックステスト用アバター)
+  const avatarId = avatar_id || "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";
+
+  try {
+    console.log(`LiveAvatar: トークン生成開始 (avatar: ${avatarId}, sandbox: ${sandbox})`);
+    const tokenRes = await fetch("https://api.liveavatar.com/v1/sessions/token", {
+      method: "POST",
+      headers: {
+        "X-API-KEY": apiKey,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        mode: "FULL",
+        avatar_id: avatarId,
+        is_sandbox: sandbox,
+        interactivity_type: "CONVERSATIONAL",
+        avatar_persona: {
+          language: "ja",
+        },
+      }),
+    });
+
+    const tokenData = await tokenRes.json();
+
+    if (tokenData.code !== 100 && tokenData.code !== 1000) {
+      throw new Error(`Token creation failed: ${JSON.stringify(tokenData)}`);
+    }
+
+    console.log(`LiveAvatar: トークン生成成功 (session: ${tokenData.data.session_id})`);
+    res.json({ session_token: tokenData.data.session_token });
+  } catch (error: any) {
+    console.error("LiveAvatar token error:", error.message);
+    res.status(500).json({
+      error: "LiveAvatarトークン生成に失敗しました",
+      detail: error.message,
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🤖 Mirai AI Consultant Backend`);
   console.log(`   Server: http://localhost:${PORT}`);
   console.log(`   Health: http://localhost:${PORT}/health`);
   console.log(`   Chat:   POST http://localhost:${PORT}/api/chat`);
+  console.log(`   LiveAvatar: POST http://localhost:${PORT}/api/liveavatar/token`);
   console.log(`   Model:  Claude Sonnet 4`);
 });
