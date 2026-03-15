@@ -150,6 +150,7 @@ app.post("/api/liveavatar/token", async (req, res) => {
         interactivity_type: "CONVERSATIONAL",
         avatar_persona: {
           language: "ja",
+          voice_id: "f206785d-e75f-4e8e-8afa-0d223d894d1f", // ElevenLabs YUI（日本語音声）
         },
       }),
     });
