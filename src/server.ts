@@ -130,9 +130,9 @@ app.post("/api/liveavatar/token", async (req, res) => {
     return;
   }
 
-  const { avatar_id, sandbox = true } = req.body || {};
-  // デフォルト: Wayne (サンドボックステスト用アバター)
-  const avatarId = avatar_id || "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";
+  const { avatar_id, sandbox = false } = req.body || {};
+  // デフォルト: Rika Sitting（プリセットアバター）
+  const avatarId = avatar_id || "5dd4d830-957a-419f-9334-0dc4399ada5d";
 
   try {
     console.log(`LiveAvatar: トークン生成開始 (avatar: ${avatarId}, sandbox: ${sandbox})`);
