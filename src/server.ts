@@ -5,10 +5,14 @@ import { getSession, deleteSession } from "./mirai-chat";
 
 dotenv.config({ override: true });
 
+// 構造化ログユーティリティ
+function log(level: "info" | "warn" | "error", event: string, data?: Record<string, unknown>): void {
+  console.log(JSON.stringify({ level, event, timestamp: new Date().toISOString(), ...data }));
+}
+
 // APIキーの存在確認
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.error("エラー: ANTHROPIC_API_KEY が設定されていません。");
-  console.error(".env ファイルに ANTHROPIC_API_KEY=sk-ant-... を設定してください。");
+  log("error", "startup_error", { reason: "ANTHROPIC_API_KEY が設定されていません" });
   process.exit(1);
 }
 
@@ -26,10 +30,59 @@ app.use((_req, res, next) => {
 app.use(express.static("public"));
 
 /**
- * ヘルスチェック
+ * ヘルスチェック（Claude API・LiveAvatar API の疎通確認を含む）
  */
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "Mirai AI Consultant" });
+app.get("/health", async (_req, res) => {
+  const timestamp = new Date().toISOString();
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const liveAvatarKey = process.env.LIVEAVATAR_API_KEY;
+
+  // Claude API 疎通確認（軽量: APIキー存在 + エンドポイント到達確認）
+  let claudeStatus = "unconfigured";
+  if (anthropicKey) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 3000);
+      const r = await fetch("https://api.anthropic.com/v1/models", {
+        headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01" },
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      claudeStatus = r.ok ? "ok" : "error";
+    } catch {
+      claudeStatus = "unreachable";
+    }
+  }
+
+  // LiveAvatar API 疎通確認（軽量: APIキー存在 + エンドポイント到達確認）
+  let liveAvatarStatus = "unconfigured";
+  if (liveAvatarKey) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 3000);
+      const r = await fetch("https://api.liveavatar.com/v1/avatars", {
+        headers: { "X-API-KEY": liveAvatarKey },
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      liveAvatarStatus = r.ok ? "ok" : "error";
+    } catch {
+      liveAvatarStatus = "unreachable";
+    }
+  }
+
+  const overall = claudeStatus === "ok" ? "ok" : "degraded";
+  log("info", "health_check", { overall, claudeStatus, liveAvatarStatus });
+
+  res.status(overall === "ok" ? 200 : 503).json({
+    status: overall,
+    service: "Mirai AI Consultant",
+    timestamp,
+    checks: {
+      claude_api: { status: claudeStatus },
+      liveavatar_api: { status: liveAvatarStatus },
+    },
+  });
 });
 
 /**
@@ -53,7 +106,7 @@ app.post("/api/chat", async (req, res) => {
     const reply = await session.chat(message);
     res.json({ reply, sessionId });
   } catch (error: any) {
-    console.error("Chat error:", error.message);
+    log("error", "chat_error", { sessionId, message: error.message });
     res.status(500).json({
       error: "応答の生成に失敗しました",
       detail: error.message,
@@ -116,7 +169,7 @@ app.post("/api/heygen-token", async (_req, res) => {
     const data = await response.json() as { data?: { token?: string } };
     res.json({ token: data.data?.token });
   } catch (error: any) {
-    console.error("HeyGen token error:", error.message);
+    log("error", "heygen_token_error", { message: error.message });
     res.status(500).json({ error: "トークン生成に失敗しました" });
   }
 });
@@ -141,7 +194,7 @@ app.post("/api/liveavatar/token", async (req, res) => {
   const avatarId = avatar_id || "5dd4d830-957a-419f-9334-0dc4399ada5d";
 
   try {
-    console.log(`LiveAvatar: トークン生成開始 (avatar: ${avatarId}, sandbox: ${sandbox})`);
+    log("info", "liveavatar_token_start", { avatarId, sandbox });
     const tokenRes = await fetch("https://api.liveavatar.com/v1/sessions/token", {
       method: "POST",
       headers: {
@@ -170,10 +223,10 @@ app.post("/api/liveavatar/token", async (req, res) => {
       throw new Error(`Token creation failed: ${JSON.stringify(tokenData)}`);
     }
 
-    console.log(`LiveAvatar: トークン生成成功 (session: ${tokenData.data.session_id})`);
+    log("info", "liveavatar_token_success", { sessionId: tokenData.data.session_id });
     res.json({ session_token: tokenData.data.session_token });
   } catch (error: any) {
-    console.error("LiveAvatar token error:", error.message);
+    log("error", "liveavatar_token_error", { message: error.message });
     res.status(500).json({
       error: "LiveAvatarトークン生成に失敗しました",
       detail: error.message,
@@ -182,10 +235,5 @@ app.post("/api/liveavatar/token", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🤖 Mirai AI Consultant Backend`);
-  console.log(`   Server: http://localhost:${PORT}`);
-  console.log(`   Health: http://localhost:${PORT}/health`);
-  console.log(`   Chat:   POST http://localhost:${PORT}/api/chat`);
-  console.log(`   LiveAvatar: POST http://localhost:${PORT}/api/liveavatar/token`);
-  console.log(`   Model:  Claude Sonnet 4`);
+  log("info", "server_started", { port: PORT, model: "claude-sonnet-4-20250514" });
 });
