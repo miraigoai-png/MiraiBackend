@@ -17,6 +17,12 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+// UTAGE会員サイトからのiframe埋め込みを許可
+app.use((_req, res, next) => {
+  res.setHeader("X-Frame-Options", "ALLOWALL");
+  res.removeHeader("X-Frame-Options");
+  next();
+});
 app.use(express.static("public"));
 
 /**
