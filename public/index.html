@@ -2,199 +2,440 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Mirai AIコンサルタント</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg-start: #071a2f;
+      --bg-end: #0a2432;
+      --panel-bg: rgba(9, 20, 36, 0.82);
+      --panel-border: rgba(128, 191, 255, 0.25);
+      --text-main: #edf6ff;
+      --text-sub: #b6cadf;
+      --accent: #ffd166;
+      --accent-strong: #f5a524;
+      --danger: #ee5253;
+      --safe: #3ddc97;
+      --shadow: 0 16px 36px rgba(3, 10, 18, 0.35);
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --app-height: 100dvh;
+      --kb-offset: 0px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #0a0a1a;
-      color: #fff;
-      min-height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 0 12px;
+      min-height: 100%;
+    }
+
+    body {
+      min-height: var(--app-height);
+      color: var(--text-main);
+      font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+      -webkit-text-size-adjust: 100%;
+      background:
+        radial-gradient(circle at 8% 10%, rgba(255, 209, 102, 0.15), transparent 46%),
+        radial-gradient(circle at 92% 78%, rgba(61, 220, 151, 0.16), transparent 40%),
+        linear-gradient(160deg, var(--bg-start), var(--bg-end));
       overflow-x: hidden;
     }
+
+    .app {
+      width: min(100%, 980px);
+      min-height: var(--app-height);
+      margin: 0 auto;
+      padding: max(12px, env(safe-area-inset-top)) 12px calc(max(14px, env(safe-area-inset-bottom)) + var(--kb-offset));
+      display: grid;
+      grid-template-rows: auto 1fr auto auto;
+      gap: 10px;
+    }
+
+    .app-header {
+      display: grid;
+      gap: 6px;
+      text-align: center;
+      padding: 10px 12px 0;
+    }
+
     h1 {
-      margin: 14px 0 6px;
-      font-size: 20px;
-      color: #ffd700;
-      text-align: center;
+      font-size: clamp(1.1rem, 4.2vw, 1.45rem);
+      letter-spacing: 0.02em;
+      color: #ffe2a8;
     }
+
     .subtitle {
-      color: #aaa;
-      font-size: 13px;
-      margin-bottom: 12px;
-      text-align: center;
+      font-size: clamp(0.79rem, 3vw, 0.9rem);
+      color: var(--text-sub);
+      line-height: 1.5;
     }
-    #video-container {
-      width: 100%;
-      max-width: 640px;
-      aspect-ratio: 16 / 9;
-      background: #111;
-      border-radius: 12px;
+
+    .layout {
+      min-height: 0;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+
+    .panel {
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--panel-border);
+      background: var(--panel-bg);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(4px);
+      min-height: 0;
+    }
+
+    .avatar-panel {
       overflow: hidden;
-      position: relative;
-      border: 2px solid rgba(255, 215, 0, 0.3);
     }
-    #video-container video {
+
+    .video-shell {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      max-height: min(38dvh, 420px);
+      background: linear-gradient(150deg, #101f38, #16263b 62%, #0e1828);
+      border-bottom: 1px solid rgba(148, 182, 217, 0.2);
+    }
+
+    #avatar-video {
       width: 100%;
       height: 100%;
       object-fit: cover;
+      display: block;
+      background: #0d1829;
     }
+
     #status-badge {
       position: absolute;
-      top: 12px;
-      left: 12px;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      z-index: 10;
+      left: 10px;
+      top: 10px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border: 1px solid transparent;
     }
-    .status-offline { background: #555; color: #ccc; }
-    .status-connecting { background: #f59e0b; color: #000; }
-    .status-ready { background: #10b981; color: #000; }
-    .status-listening { background: #3b82f6; color: #fff; }
-    .status-thinking { background: #8b5cf6; color: #fff; }
-    .status-speaking { background: #ffd700; color: #000; }
 
-    #controls {
-      margin: 10px 0;
-      display: flex;
+    .status-offline { background: rgba(105, 120, 145, 0.24); color: #d5dfec; border-color: rgba(166, 182, 207, 0.24); }
+    .status-connecting { background: rgba(245, 165, 36, 0.22); color: #ffe6b8; border-color: rgba(245, 165, 36, 0.3); }
+    .status-ready { background: rgba(61, 220, 151, 0.22); color: #c9ffe5; border-color: rgba(61, 220, 151, 0.32); }
+    .status-thinking { background: rgba(126, 159, 255, 0.22); color: #dde9ff; border-color: rgba(126, 159, 255, 0.3); }
+    .status-speaking { background: rgba(255, 209, 102, 0.22); color: #fff0ce; border-color: rgba(255, 209, 102, 0.35); }
+
+    .video-status-text {
+      padding: 9px 12px;
+      font-size: 0.82rem;
+      color: var(--text-sub);
+      min-height: 2.5em;
+      line-height: 1.35;
+    }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 8px;
-      width: 100%;
-      max-width: 640px;
+      padding: 10px;
     }
+
     button {
-      padding: 12px 16px;
-      min-height: 44px;
+      min-height: 46px;
       border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
       cursor: pointer;
-      transition: all 0.2s;
-      flex: 1;
+      color: #071829;
+      background: #d8e9ff;
+      touch-action: manipulation;
+      transition: transform 0.16s ease, opacity 0.16s ease, filter 0.16s ease;
     }
-    #btn-start { background: #ffd700; color: #000; }
-    #btn-start:hover { background: #ffed4a; }
-    #btn-start:disabled { background: #555; color: #888; cursor: not-allowed; }
-    #btn-stop { background: #ef4444; color: #fff; }
-    #btn-stop:disabled { background: #555; color: #888; cursor: not-allowed; }
-    #btn-interrupt { background: #6b7280; color: #fff; }
-    #btn-interrupt:disabled { background: #555; color: #888; cursor: not-allowed; }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button:hover:enabled {
+      filter: brightness(1.04);
+    }
+
+    button:disabled {
+      opacity: 0.46;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #btn-start {
+      background: linear-gradient(120deg, var(--accent), var(--accent-strong));
+      color: #2c1700;
+    }
+
+    #btn-stop {
+      background: rgba(238, 82, 83, 0.9);
+      color: #fff5f5;
+    }
+
+    #btn-interrupt {
+      background: rgba(130, 160, 197, 0.9);
+      color: #071829;
+    }
+
+    .chat-panel {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      gap: 8px;
+      padding: 10px;
+      min-height: min(46dvh, 460px);
+    }
 
     #chat-log {
-      width: 100%;
-      max-width: 640px;
-      max-height: 28vh;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(148, 182, 217, 0.24);
+      background: rgba(10, 25, 45, 0.56);
+      padding: 10px;
+      height: clamp(180px, 28dvh, 320px);
       overflow-y: auto;
-      padding: 12px;
-      background: #111;
-      border-radius: 12px;
-      margin-bottom: 10px;
+      overscroll-behavior: contain;
+      scroll-behavior: smooth;
     }
-    .chat-msg { margin-bottom: 10px; line-height: 1.5; }
-    .chat-msg.user { color: #60a5fa; }
-    .chat-msg.user::before { content: '👤 '; }
-    .chat-msg.mirai { color: #fbbf24; }
-    .chat-msg.mirai::before { content: '🤖 '; }
-    .chat-msg.system { color: #6b7280; font-size: 12px; }
 
-    #text-input-area {
-      width: 100%;
-      max-width: 640px;
-      display: flex;
-      gap: 8px;
+    .chat-msg {
       margin-bottom: 10px;
+      font-size: 0.9rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
+
+    .chat-msg:last-child {
+      margin-bottom: 0;
+    }
+
+    .chat-msg.user {
+      color: #c6edff;
+    }
+
+    .chat-msg.user::before {
+      content: "あなた: ";
+      font-weight: 700;
+    }
+
+    .chat-msg.mirai {
+      color: #ffe2b0;
+    }
+
+    .chat-msg.mirai::before {
+      content: "Mirai: ";
+      font-weight: 700;
+    }
+
+    .chat-msg.system {
+      color: #b7cae3;
+      font-size: 0.8rem;
+    }
+
+    .composer {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
     #text-input {
-      flex: 1;
-      padding: 12px 16px;
-      min-height: 44px;
-      border: 1px solid #333;
-      border-radius: 8px;
-      background: #1a1a2e;
-      color: #fff;
+      min-height: 46px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 182, 217, 0.45);
+      background: rgba(11, 28, 49, 0.75);
+      color: var(--text-main);
+      padding: 11px 12px;
       font-size: 16px;
       outline: none;
     }
-    #text-input:focus { border-color: #ffd700; }
-    #btn-send {
-      background: #ffd700;
-      color: #000;
-      flex: 0 0 auto;
-      padding: 12px 20px;
+
+    #text-input:focus {
+      border-color: rgba(255, 209, 102, 0.84);
+      box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.2);
     }
-    #btn-send:disabled { background: #555; color: #888; cursor: not-allowed; }
+
+    #btn-send {
+      width: 94px;
+      background: linear-gradient(120deg, var(--safe), #7deec2);
+    }
+
+    .embed-note,
     .disclaimer {
-      color: #666;
-      font-size: 11px;
+      font-size: 0.75rem;
+      color: var(--text-sub);
       text-align: center;
-      margin: 6px 0 14px;
-      width: 100%;
-      max-width: 640px;
       padding: 0 4px;
+      line-height: 1.5;
+    }
+
+    .disclaimer {
+      opacity: 0.88;
+    }
+
+    body.embedded .app {
+      padding-top: 8px;
+      gap: 8px;
+    }
+
+    body.embedded .app-header {
+      padding-top: 4px;
+      gap: 4px;
+    }
+
+    body.embedded h1 {
+      font-size: clamp(1rem, 3.8vw, 1.2rem);
+    }
+
+    body.embedded .subtitle {
+      font-size: 0.77rem;
+    }
+
+    body.embedded .video-shell {
+      max-height: min(32dvh, 300px);
+    }
+
+    body.embedded .chat-panel {
+      min-height: min(48dvh, 440px);
+    }
+
+    body.embedded #chat-log {
+      height: clamp(165px, 25dvh, 260px);
+    }
+
+    body.keyboard-open .app-header,
+    body.keyboard-open .disclaimer,
+    body.keyboard-open #embed-note {
+      display: none;
+    }
+
+    body.keyboard-open .app {
+      padding-top: max(8px, env(safe-area-inset-top));
+      gap: 8px;
+    }
+
+    body.keyboard-open .chat-panel {
+      min-height: min(58dvh, 520px);
+    }
+
+    body.keyboard-open #chat-log {
+      height: clamp(150px, 24dvh, 250px);
+    }
+
+    @media (min-width: 900px) {
+      .app {
+        gap: 12px;
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      .layout {
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        align-items: start;
+      }
+
+      .video-shell {
+        max-height: min(48dvh, 460px);
+      }
+
+      .chat-panel {
+        min-height: min(52dvh, 560px);
+      }
+
+      #chat-log {
+        height: clamp(220px, 36dvh, 460px);
+      }
+
+      body.keyboard-open .app-header,
+      body.keyboard-open .disclaimer,
+      body.keyboard-open #embed-note {
+        display: block;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Mirai AIコンサルタント</h1>
-  <p class="subtitle">AI搭載ビジネスアドバイザー（Powered by Claude × LiveAvatar）</p>
+  <main class="app">
+    <header class="app-header">
+      <h1>Mirai AIコンサルタント</h1>
+      <p class="subtitle">AI搭載ビジネスアドバイザー（Claude × LiveAvatar）</p>
+    </header>
 
-  <div id="video-container">
-    <video id="avatar-video" autoplay playsinline></video>
-    <span id="status-badge" class="status-offline">オフライン</span>
-  </div>
+    <div class="layout">
+      <section class="panel avatar-panel" aria-label="アバター表示">
+        <div class="video-shell">
+          <video id="avatar-video" autoplay playsinline></video>
+          <span id="status-badge" class="status-offline">オフライン</span>
+        </div>
+        <p id="video-status-text" class="video-status-text">アバター未接続です。「アバターを起動」を押してください。</p>
+        <div class="action-row">
+          <button id="btn-start" type="button">アバターを起動</button>
+          <button id="btn-stop" type="button" disabled>終了</button>
+          <button id="btn-interrupt" type="button" disabled>中断</button>
+        </div>
+      </section>
 
-  <div id="controls">
-    <button id="btn-start">アバターを起動</button>
-    <button id="btn-stop" disabled>終了</button>
-    <button id="btn-interrupt" disabled>中断</button>
-  </div>
+      <section class="panel chat-panel" aria-label="チャット">
+        <div id="chat-log" role="log" aria-live="polite" aria-relevant="additions">
+          <div class="chat-msg system">「アバターを起動」を押して、Miraiとの対話を始めましょう。</div>
+        </div>
+        <form id="text-form" class="composer" autocomplete="off">
+          <input id="text-input" type="text" placeholder="テキストで質問する..." disabled>
+          <button id="btn-send" type="submit" disabled>送信</button>
+        </form>
+      </section>
+    </div>
 
-  <div id="text-input-area">
-    <input id="text-input" type="text" placeholder="テキストで質問する..." disabled>
-    <button id="btn-send" disabled>送信</button>
-  </div>
-
-  <div id="chat-log">
-    <div class="chat-msg system">「アバターを起動」を押して、Miraiとの対話を始めましょう。</div>
-  </div>
-
-  <p class="disclaimer">
-    ※本サービスは一般的な情報提供を目的としており、法的・税務的アドバイスではありません。
-  </p>
+    <p id="embed-note" class="embed-note" hidden></p>
+    <p class="disclaimer">※本サービスは一般的な情報提供を目的としており、法的・税務的アドバイスではありません。</p>
+  </main>
 
   <script type="module">
     import {
       LiveAvatarSession,
       SessionEvent,
       SessionState,
-      AgentEventsEnum,
+      AgentEventsEnum
     } from "https://esm.sh/@heygen/liveavatar-web-sdk";
 
     const BACKEND_URL = window.location.origin;
-
+    const chatSessionId = "session-" + Date.now();
+    const isEmbedded = window.self !== window.top;
+    const hasVisualViewport = Boolean(window.visualViewport);
     let session = null;
-    let chatSessionId = "session-" + Date.now();
+    let isSending = false;
 
-    // DOM elements
-    const videoContainer = document.getElementById("video-container");
     const badge = document.getElementById("status-badge");
+    const videoStatusText = document.getElementById("video-status-text");
     const btnStart = document.getElementById("btn-start");
     const btnStop = document.getElementById("btn-stop");
     const btnInterrupt = document.getElementById("btn-interrupt");
     const textInput = document.getElementById("text-input");
     const btnSend = document.getElementById("btn-send");
+    const textForm = document.getElementById("text-form");
     const chatLog = document.getElementById("chat-log");
+    const embedNote = document.getElementById("embed-note");
+    const avatarVideo = document.getElementById("avatar-video");
 
-    function setStatus(status, label) {
+    if (isEmbedded) {
+      document.body.classList.add("embedded");
+      embedNote.hidden = false;
+      embedNote.textContent = "埋め込み表示モードで最適化中（UTAGE iframe向け）。";
+    }
+
+    function setStatus(status, label, detail) {
       badge.className = "status-" + status;
       badge.textContent = label;
+      videoStatusText.textContent = detail;
     }
 
     function addChatMsg(role, text) {
@@ -205,172 +446,213 @@
       chatLog.scrollTop = chatLog.scrollHeight;
     }
 
-    function enableControls(enabled) {
-      btnStop.disabled = !enabled;
-      btnInterrupt.disabled = !enabled;
-      textInput.disabled = !enabled;
-      btnSend.disabled = !enabled;
-      if (enabled) textInput.focus();
+    function setControlState(connected) {
+      btnStop.disabled = !connected;
+      btnInterrupt.disabled = !connected;
+      textInput.disabled = !connected || isSending;
+      btnSend.disabled = !connected || isSending;
+      btnStart.disabled = connected;
+      if (connected && !isSending) {
+        textInput.focus();
+      }
+    }
+
+    function updateViewportLayout() {
+      const baseHeight = hasVisualViewport ? Math.round(window.visualViewport.height) : window.innerHeight;
+      document.documentElement.style.setProperty("--app-height", baseHeight + "px");
+
+      const activeInput = document.activeElement === textInput;
+      const kbOffset = Math.max(0, window.innerHeight - baseHeight);
+      const shouldCompact = activeInput && kbOffset > 60;
+
+      document.documentElement.style.setProperty("--kb-offset", shouldCompact ? kbOffset + "px" : "0px");
+      document.body.classList.toggle("keyboard-open", shouldCompact);
+
+      if (shouldCompact) {
+        requestAnimationFrame(() => {
+          textInput.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        });
+      }
     }
 
     async function sendToMirai(message) {
-      const res = await fetch(BACKEND_URL + "/api/chat", {
+      const response = await fetch(BACKEND_URL + "/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: chatSessionId, message }),
+        body: JSON.stringify({ sessionId: chatSessionId, message })
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        throw new Error(data.detail || data.error || "チャット応答に失敗しました");
+      }
       return data.reply;
     }
 
-    // Chat handler: User text -> Claude API -> Avatar speaks
-    async function handleUserMessage(message) {
-      if (!message.trim() || !session) return;
-
-      addChatMsg("user", message);
-      setStatus("thinking", "考え中...");
-
+    async function checkFramePolicy() {
       try {
-        const reply = await sendToMirai(message);
-        addChatMsg("mirai", reply);
-        setStatus("speaking", "話しています...");
-        // Use SDK's repeat() to make avatar speak the text
-        session.repeat(reply);
-      } catch (err) {
-        console.error("Chat error:", err);
-        addChatMsg("system", "エラーが発生しました: " + err.message);
-        setStatus("ready", "待機中");
+        const response = await fetch(window.location.href, { method: "HEAD", cache: "no-store" });
+        const xFrameOptions = response.headers.get("x-frame-options");
+        if (xFrameOptions) {
+          addChatMsg("system", "X-Frame-Options: " + xFrameOptions);
+        } else {
+          addChatMsg("system", "X-Frame-Options ヘッダー未設定（iframe許可想定）。");
+        }
+      } catch (error) {
+        console.warn("Frame policy check failed:", error);
       }
     }
 
-    // ===== Start Avatar =====
-    btnStart.addEventListener("click", async () => {
+    function registerSessionEvents() {
+      session.on(SessionEvent.SESSION_STATE_CHANGED, (state) => {
+        switch (state) {
+          case SessionState.CONNECTING:
+            setStatus("connecting", "接続中", "LiveAvatarに接続しています...");
+            break;
+          case SessionState.CONNECTED:
+            setStatus("ready", "待機中", "接続完了。テキストで質問できます。");
+            setControlState(true);
+            addChatMsg("system", "Miraiが起動しました。質問を入力してください。");
+            break;
+          case SessionState.DISCONNECTING:
+            setStatus("offline", "切断中", "セッションを終了しています...");
+            break;
+          case SessionState.DISCONNECTED:
+            setStatus("offline", "オフライン", "セッションが終了しました。");
+            cleanupSession();
+            addChatMsg("system", "セッションが切断されました。");
+            break;
+          default:
+            break;
+        }
+      });
+
+      session.on(SessionEvent.SESSION_STREAM_READY, () => {
+        session.attach(avatarVideo);
+        setStatus("ready", "待機中", "映像ストリーム接続完了。質問を入力できます。");
+        addChatMsg("system", "映像ストリーム接続完了。");
+      });
+
+      session.on(SessionEvent.SESSION_DISCONNECTED, (reason) => {
+        setStatus("offline", "切断", "接続が解除されました。");
+        cleanupSession();
+        addChatMsg("system", "接続が解除されました: " + (reason || "不明"));
+      });
+
+      session.on(AgentEventsEnum.AVATAR_SPEAK_STARTED, () => {
+        setStatus("speaking", "話しています", "Miraiが回答を読み上げ中です。");
+      });
+
+      session.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () => {
+        setStatus("ready", "待機中", "質問を続けて入力できます。");
+      });
+    }
+
+    async function startAvatarSession() {
       try {
         btnStart.disabled = true;
-        setStatus("connecting", "接続中...");
-        addChatMsg("system", "LiveAvatarに接続中...");
+        setStatus("connecting", "接続中", "トークン取得とセッション初期化を実行中...");
+        addChatMsg("system", "LiveAvatarに接続しています...");
 
-        // 1. Get session token from backend
-        const res = await fetch(BACKEND_URL + "/api/liveavatar/token", {
+        const tokenResponse = await fetch(BACKEND_URL + "/api/liveavatar/token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({})
         });
-        const tokenData = await res.json();
 
-        if (tokenData.error) {
-          throw new Error(tokenData.detail || tokenData.error);
+        const tokenData = await tokenResponse.json();
+        if (!tokenResponse.ok || tokenData.error || !tokenData.session_token) {
+          throw new Error(tokenData.detail || tokenData.error || "セッショントークンの取得に失敗しました");
         }
 
-        addChatMsg("system", "トークン取得完了");
-        console.log("Got session token");
-
-        // 2. Create LiveAvatarSession with SDK
         session = new LiveAvatarSession(tokenData.session_token, {
-          voiceChat: false,  // テキスト入力のみ（マイク不要）
+          voiceChat: false
         });
-
-        // 3. Set up event listeners
-        session.on(SessionEvent.SESSION_STATE_CHANGED, (state) => {
-          console.log("Session state:", state);
-          switch (state) {
-            case SessionState.CONNECTING:
-              setStatus("connecting", "接続中...");
-              break;
-            case SessionState.CONNECTED:
-              setStatus("ready", "待機中");
-              addChatMsg("system", "Miraiが起動しました。テキストで質問してください！");
-              enableControls(true);
-              break;
-            case SessionState.DISCONNECTING:
-              setStatus("offline", "切断中...");
-              break;
-            case SessionState.DISCONNECTED:
-              setStatus("offline", "オフライン");
-              addChatMsg("system", "セッションが終了しました。");
-              cleanup();
-              break;
-          }
-        });
-
-        session.on(SessionEvent.SESSION_STREAM_READY, () => {
-          console.log("Stream ready - attaching video");
-          // Attach video to <video> element (not container div)
-          const videoEl = document.getElementById("avatar-video");
-          session.attach(videoEl);
-          addChatMsg("system", "映像ストリーム接続完了");
-        });
-
-        session.on(SessionEvent.SESSION_DISCONNECTED, (reason) => {
-          console.log("Disconnected:", reason);
-          setStatus("offline", "切断されました");
-          cleanup();
-        });
-
-        // Agent events (avatar speaking state)
-        session.on(AgentEventsEnum.AVATAR_SPEAK_STARTED, () => {
-          setStatus("speaking", "話しています...");
-        });
-
-        session.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () => {
-          setStatus("ready", "待機中");
-        });
-
-        // 4. Start the session (SDK handles LiveKit + WebSocket internally)
-        addChatMsg("system", "セッション開始中...");
+        registerSessionEvents();
         await session.start();
-        console.log("Session started successfully");
-
-      } catch (err) {
-        console.error("Start error:", err);
-        addChatMsg("system", "起動エラー: " + err.message);
-        setStatus("offline", "オフライン");
-        btnStart.disabled = false;
+      } catch (error) {
         session = null;
+        setStatus("offline", "オフライン", "起動エラーが発生しました。再試行してください。");
+        setControlState(false);
+        btnStart.disabled = false;
+        addChatMsg("system", "起動エラー: " + error.message);
       }
-    });
-
-    // ===== Stop Avatar =====
-    btnStop.addEventListener("click", async () => {
-      if (session) {
-        await session.stop();
-      }
-      cleanup();
-      setStatus("offline", "オフライン");
-      addChatMsg("system", "セッションを終了しました。");
-    });
-
-    // ===== Interrupt =====
-    btnInterrupt.addEventListener("click", () => {
-      if (session) session.interrupt();
-    });
-
-    // ===== Text Input =====
-    btnSend.addEventListener("click", () => {
-      handleUserMessage(textInput.value);
-      textInput.value = "";
-    });
-
-    textInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        handleUserMessage(textInput.value);
-        textInput.value = "";
-      }
-    });
-
-    // ===== Cleanup =====
-    function cleanup() {
-      session = null;
-      enableControls(false);
-      btnStart.disabled = false;
-      // Reset video element
-      const videoEl = document.getElementById("avatar-video");
-      if (videoEl) videoEl.srcObject = null;
     }
 
+    async function stopAvatarSession() {
+      if (!session) return;
+      try {
+        await session.stop();
+      } catch (error) {
+        console.error("Stop session failed:", error);
+      }
+      cleanupSession();
+      addChatMsg("system", "セッションを終了しました。");
+      setStatus("offline", "オフライン", "アバターは停止中です。");
+    }
+
+    function cleanupSession() {
+      session = null;
+      isSending = false;
+      avatarVideo.srcObject = null;
+      setControlState(false);
+      btnStart.disabled = false;
+    }
+
+    async function handleUserMessage(message) {
+      const trimmed = message.trim();
+      if (!trimmed || !session || isSending) return;
+
+      addChatMsg("user", trimmed);
+      isSending = true;
+      setControlState(true);
+      setStatus("thinking", "考え中", "Miraiが回答を生成しています...");
+
+      try {
+        const reply = await sendToMirai(trimmed);
+        addChatMsg("mirai", reply);
+        setStatus("speaking", "話しています", "回答を読み上げています...");
+        await session.repeat(reply);
+      } catch (error) {
+        addChatMsg("system", "エラー: " + error.message);
+        setStatus("ready", "待機中", "再度テキストを送信してください。");
+      } finally {
+        isSending = false;
+        setControlState(Boolean(session));
+      }
+    }
+
+    btnStart.addEventListener("click", startAvatarSession);
+    btnStop.addEventListener("click", stopAvatarSession);
+
+    btnInterrupt.addEventListener("click", () => {
+      if (!session) return;
+      session.interrupt();
+      setStatus("ready", "待機中", "発話を中断しました。次の質問が可能です。");
+    });
+
+    textForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const message = textInput.value;
+      textInput.value = "";
+      await handleUserMessage(message);
+    });
+
+    textInput.addEventListener("focus", updateViewportLayout);
+    textInput.addEventListener("blur", updateViewportLayout);
+    window.addEventListener("resize", updateViewportLayout);
+
+    if (hasVisualViewport) {
+      window.visualViewport.addEventListener("resize", updateViewportLayout);
+      window.visualViewport.addEventListener("scroll", updateViewportLayout);
+    }
+
+    checkFramePolicy();
+    updateViewportLayout();
+
     window.addEventListener("beforeunload", () => {
-      if (session) session.stop();
+      if (session) {
+        session.stop();
+      }
     });
   </script>
 </body>
