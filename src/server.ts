@@ -190,8 +190,8 @@ app.post("/api/liveavatar/token", async (req, res) => {
   }
 
   const { avatar_id, sandbox = false } = req.body || {};
-  // デフォルト: Rika Sitting（プリセットアバター）
-  const avatarId = avatar_id || "5dd4d830-957a-419f-9334-0dc4399ada5d";
+  // デフォルト: 環境変数 or 本番Miraiアバター
+  const avatarId = avatar_id || process.env.DEFAULT_AVATAR_ID || "1fdb012b-def9-435c-a297-fb8717556d02";
 
   try {
     log("info", "liveavatar_token_start", { avatarId, sandbox });
