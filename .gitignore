@@ -3,3 +3,12 @@ dist/
 .env
 *.js
 !check-env.js
+
+# Local AI tool/workspace artifacts
+.cursor/
+.serena/
+.agents/
+agents/
+research/
+CLAUDE.md
+CODEX.md
