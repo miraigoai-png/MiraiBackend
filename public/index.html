@@ -75,6 +75,21 @@
       line-height: 1.5;
     }
 
+    .hero-cta {
+      margin: 4px auto 0;
+      width: min(100%, 420px);
+      min-height: 50px;
+      border-radius: 999px;
+      background: linear-gradient(120deg, #ffdc8a, #f7a436);
+      color: #2f1a00;
+      box-shadow: 0 10px 28px rgba(249, 176, 66, 0.28);
+    }
+
+    .hero-cta:focus-visible {
+      outline: 2px solid #ffd166;
+      outline-offset: 3px;
+    }
+
     .layout {
       min-height: 0;
       display: grid;
@@ -93,6 +108,43 @@
 
     .avatar-panel {
       overflow: hidden;
+    }
+
+    .onboarding-panel {
+      grid-column: 1 / -1;
+      padding: 10px;
+      display: grid;
+      gap: 7px;
+    }
+
+    .onboarding-title {
+      font-size: 0.86rem;
+      color: #e4eeff;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .onboarding-steps {
+      list-style: none;
+      display: grid;
+      gap: 6px;
+      font-size: 0.82rem;
+      color: #bad0e8;
+      line-height: 1.4;
+    }
+
+    .onboarding-step {
+      border: 1px solid rgba(148, 182, 217, 0.22);
+      border-radius: 10px;
+      padding: 7px 9px;
+      background: rgba(12, 26, 44, 0.55);
+    }
+
+    .onboarding-step.active {
+      border-color: rgba(255, 209, 102, 0.62);
+      background: rgba(255, 209, 102, 0.14);
+      color: #ffeec3;
+      font-weight: 700;
     }
 
     .video-shell {
@@ -135,6 +187,26 @@
       color: var(--text-sub);
       min-height: 2.5em;
       line-height: 1.35;
+    }
+
+    .trial-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 12px;
+      border-top: 1px solid rgba(148, 182, 217, 0.2);
+      border-bottom: 1px solid rgba(148, 182, 217, 0.2);
+      background: rgba(9, 24, 42, 0.8);
+      font-size: 0.8rem;
+      color: var(--text-sub);
+    }
+
+    .trial-time {
+      font-weight: 700;
+      color: #ffe3aa;
+      letter-spacing: 0.03em;
+      font-variant-numeric: tabular-nums;
     }
 
     .action-row {
@@ -368,15 +440,29 @@
     <header class="app-header">
       <h1>Mirai AIコンサルタント</h1>
       <p class="subtitle">AI搭載ビジネスアドバイザー（Claude × LiveAvatar）</p>
+      <button id="btn-try-free" class="hero-cta" type="button">無料で5分間Miraiと相談する</button>
     </header>
 
     <div class="layout">
+      <section class="panel onboarding-panel" aria-label="初回オンボーディング">
+        <p class="onboarding-title">はじめての方へ（3ステップ）</p>
+        <ul class="onboarding-steps">
+          <li class="onboarding-step active" data-step="1">1. 無料5分体験を開始してMiraiを起動</li>
+          <li class="onboarding-step" data-step="2">2. 事業の悩みを1つ入力して送信</li>
+          <li class="onboarding-step" data-step="3">3. 回答の要点を確認し、続けるなら有料登録へ</li>
+        </ul>
+      </section>
+
       <section class="panel avatar-panel" aria-label="アバター表示">
         <div class="video-shell">
-          <video id="avatar-video" autoplay playsinline></video>
-          <span id="status-badge" class="status-offline">オフライン</span>
+          <video id="avatar-video" autoplay playsinline aria-label="Miraiアバター映像"></video>
+          <span id="status-badge" class="status-offline" role="status" aria-live="polite">オフライン</span>
         </div>
         <p id="video-status-text" class="video-status-text">アバター未接続です。「アバターを起動」を押してください。</p>
+        <div id="trial-strip" class="trial-strip" hidden>
+          <span id="trial-label">無料体験の残り時間</span>
+          <span id="trial-time" class="trial-time" aria-live="polite">05:00</span>
+        </div>
         <div class="action-row">
           <button id="btn-start" type="button">アバターを起動</button>
           <button id="btn-stop" type="button" disabled>終了</button>
@@ -389,7 +475,7 @@
           <div class="chat-msg system">「アバターを起動」を押して、Miraiとの対話を始めましょう。</div>
         </div>
         <form id="text-form" class="composer" autocomplete="off">
-          <input id="text-input" type="text" placeholder="テキストで質問する..." disabled>
+          <input id="text-input" type="text" placeholder="テキストで質問する..." aria-label="Miraiへの質問入力" disabled>
           <button id="btn-send" type="submit" disabled>送信</button>
         </form>
       </section>
@@ -413,10 +499,15 @@
     const hasVisualViewport = Boolean(window.visualViewport);
     let session = null;
     let isSending = false;
+    let trialTimerId = null;
+    let trialSecondsLeft = 5 * 60;
+    let isTrialActive = false;
+    let hasSentFirstQuestion = false;
 
     const badge = document.getElementById("status-badge");
     const videoStatusText = document.getElementById("video-status-text");
     const btnStart = document.getElementById("btn-start");
+    const btnTryFree = document.getElementById("btn-try-free");
     const btnStop = document.getElementById("btn-stop");
     const btnInterrupt = document.getElementById("btn-interrupt");
     const textInput = document.getElementById("text-input");
@@ -425,6 +516,9 @@
     const chatLog = document.getElementById("chat-log");
     const embedNote = document.getElementById("embed-note");
     const avatarVideo = document.getElementById("avatar-video");
+    const trialStrip = document.getElementById("trial-strip");
+    const trialTime = document.getElementById("trial-time");
+    const onboardingSteps = Array.from(document.querySelectorAll(".onboarding-step"));
 
     if (isEmbedded) {
       document.body.classList.add("embedded");
@@ -436,6 +530,67 @@
       badge.className = "status-" + status;
       badge.textContent = label;
       videoStatusText.textContent = detail;
+    }
+
+    function setOnboardingStep(step) {
+      onboardingSteps.forEach((item) => {
+        item.classList.toggle("active", Number(item.dataset.step) === step);
+      });
+    }
+
+    function formatTrialTime(totalSeconds) {
+      const safeSeconds = Math.max(0, totalSeconds);
+      const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, "0");
+      const seconds = String(safeSeconds % 60).padStart(2, "0");
+      return minutes + ":" + seconds;
+    }
+
+    function renderTrialTime() {
+      trialTime.textContent = formatTrialTime(trialSecondsLeft);
+    }
+
+    function stopTrialCountdown(reset) {
+      if (trialTimerId) {
+        clearInterval(trialTimerId);
+        trialTimerId = null;
+      }
+      if (reset) {
+        isTrialActive = false;
+        trialSecondsLeft = 5 * 60;
+        trialStrip.hidden = true;
+        renderTrialTime();
+        btnTryFree.textContent = "無料で5分間Miraiと相談する";
+      }
+    }
+
+    async function handleTrialTimeUp() {
+      stopTrialCountdown(false);
+      isTrialActive = false;
+      trialStrip.hidden = false;
+      trialTime.textContent = "00:00";
+      btnTryFree.textContent = "無料体験をもう一度開始";
+      addChatMsg("system", "無料体験5分が終了しました。続ける場合は有料登録をご案内します。");
+      setStatus("ready", "待機中", "無料体験は終了しました。有料登録で継続できます。");
+      if (session) {
+        await stopAvatarSession(true);
+      }
+    }
+
+    function startTrialCountdown() {
+      stopTrialCountdown(false);
+      isTrialActive = true;
+      trialSecondsLeft = 5 * 60;
+      trialStrip.hidden = false;
+      renderTrialTime();
+      btnTryFree.textContent = "無料体験中";
+
+      trialTimerId = window.setInterval(() => {
+        trialSecondsLeft -= 1;
+        renderTrialTime();
+        if (trialSecondsLeft <= 0) {
+          handleTrialTimeUp();
+        }
+      }, 1000);
     }
 
     function addChatMsg(role, text) {
@@ -452,6 +607,7 @@
       textInput.disabled = !connected || isSending;
       btnSend.disabled = !connected || isSending;
       btnStart.disabled = connected;
+      btnTryFree.disabled = connected && isSending;
       if (connected && !isSending) {
         textInput.focus();
       }
@@ -511,6 +667,7 @@
           case SessionState.CONNECTED:
             setStatus("ready", "待機中", "接続完了。テキストで質問できます。");
             setControlState(true);
+            setOnboardingStep(2);
             addChatMsg("system", "Miraiが起動しました。質問を入力してください。");
             break;
           case SessionState.DISCONNECTING:
@@ -571,6 +728,7 @@
         await session.start();
       } catch (error) {
         session = null;
+        stopTrialCountdown(true);
         setStatus("offline", "オフライン", "起動エラーが発生しました。再試行してください。");
         setControlState(false);
         btnStart.disabled = false;
@@ -578,24 +736,28 @@
       }
     }
 
-    async function stopAvatarSession() {
+    async function stopAvatarSession(preserveTrialUi = false) {
       if (!session) return;
       try {
         await session.stop();
       } catch (error) {
         console.error("Stop session failed:", error);
       }
-      cleanupSession();
+      cleanupSession(preserveTrialUi);
       addChatMsg("system", "セッションを終了しました。");
       setStatus("offline", "オフライン", "アバターは停止中です。");
     }
 
-    function cleanupSession() {
+    function cleanupSession(preserveTrialUi = false) {
       session = null;
       isSending = false;
       avatarVideo.srcObject = null;
       setControlState(false);
       btnStart.disabled = false;
+      if (!preserveTrialUi) {
+        stopTrialCountdown(true);
+        setOnboardingStep(1);
+      }
     }
 
     async function handleUserMessage(message) {
@@ -603,6 +765,10 @@
       if (!trimmed || !session || isSending) return;
 
       addChatMsg("user", trimmed);
+      if (!hasSentFirstQuestion) {
+        hasSentFirstQuestion = true;
+        setOnboardingStep(3);
+      }
       isSending = true;
       setControlState(true);
       setStatus("thinking", "考え中", "Miraiが回答を生成しています...");
@@ -622,7 +788,25 @@
     }
 
     btnStart.addEventListener("click", startAvatarSession);
-    btnStop.addEventListener("click", stopAvatarSession);
+    btnTryFree.addEventListener("click", async () => {
+      if (isTrialActive && session) {
+        textInput.focus();
+        return;
+      }
+      hasSentFirstQuestion = false;
+      setOnboardingStep(1);
+      startTrialCountdown();
+      addChatMsg("system", "無料5分体験を開始しました。最初の質問を入力してください。");
+      if (session) {
+        setOnboardingStep(2);
+        textInput.focus();
+        return;
+      }
+      await startAvatarSession();
+    });
+    btnStop.addEventListener("click", () => {
+      stopAvatarSession(false);
+    });
 
     btnInterrupt.addEventListener("click", () => {
       if (!session) return;
