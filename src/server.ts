@@ -5,6 +5,13 @@ import { getSession, deleteSession } from "./mirai-chat";
 
 dotenv.config({ override: true });
 
+const DEFAULT_AVATAR_ID = process.env.DEFAULT_AVATAR_ID || "1fdb012b-def9-435c-a297-fb8717556d02";
+const SANDBOX_AVATAR_ID = process.env.SANDBOX_AVATAR_ID || DEFAULT_AVATAR_ID;
+const USE_SANDBOX_FALLBACK = ["1", "true", "yes", "on"].includes(
+  String(process.env.USE_SANDBOX_FALLBACK || "false").toLowerCase()
+);
+const TRIAL_DURATION_SEC = Number.parseInt(process.env.TRIAL_DURATION_SEC || "0", 10) || 0;
+
 // 構造化ログユーティリティ
 function log(level: "info" | "warn" | "error", event: string, data?: Record<string, unknown>): void {
   console.log(JSON.stringify({ level, event, timestamp: new Date().toISOString(), ...data }));
@@ -28,6 +35,12 @@ app.use((_req, res, next) => {
   next();
 });
 app.use(express.static("public"));
+
+function parseSandboxQuery(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const normalized = value.toLowerCase();
+  return normalized === "true" || normalized === "1";
+}
 
 /**
  * ヘルスチェック（Claude API・LiveAvatar API の疎通確認を含む）
@@ -86,6 +99,74 @@ app.get("/health", async (_req, res) => {
 });
 
 /**
+ * フロント向け設定値
+ */
+app.get("/api/config", (_req, res) => {
+  res.json({
+    defaultAvatarId: DEFAULT_AVATAR_ID,
+    sandboxAvatarId: SANDBOX_AVATAR_ID,
+    useSandboxFallback: USE_SANDBOX_FALLBACK,
+    trialDurationSec: TRIAL_DURATION_SEC,
+  });
+});
+
+/**
+ * LiveAvatar疎通確認
+ * GET /api/liveavatar/check?avatar_id=...&sandbox=true|1
+ */
+app.get("/api/liveavatar/check", async (req, res) => {
+  const apiKey = process.env.LIVEAVATAR_API_KEY;
+  const sandbox = parseSandboxQuery(req.query.sandbox);
+  const avatarIdFromQuery = typeof req.query.avatar_id === "string" ? req.query.avatar_id : "";
+  const avatarId = avatarIdFromQuery || DEFAULT_AVATAR_ID;
+
+  if (!apiKey) {
+    res.json({
+      ok: false,
+      status: 500,
+      reason: "unconfigured",
+      code: null,
+      detail: "LIVEAVATAR_API_KEY が設定されていません",
+    });
+    return;
+  }
+
+  try {
+    const endpoint = new URL("https://api.liveavatar.com/v1/avatars");
+    endpoint.searchParams.set("avatar_id", avatarId);
+    if (sandbox) {
+      endpoint.searchParams.set("is_sandbox", "true");
+    }
+
+    const response = await fetch(endpoint.toString(), {
+      headers: {
+        "X-API-KEY": apiKey,
+        "Accept": "application/json",
+      },
+    });
+
+    const payload = await response.json().catch(() => null) as any;
+    const detail = payload?.message || payload?.detail || payload;
+
+    res.json({
+      ok: response.ok,
+      status: response.status,
+      reason: response.ok ? "ok" : "http_error",
+      code: payload?.code ?? null,
+      detail,
+    });
+  } catch (error: any) {
+    res.json({
+      ok: false,
+      status: 503,
+      reason: "network_error",
+      code: null,
+      detail: error?.message || "LiveAvatar APIへの接続に失敗しました",
+    });
+  }
+});
+
+/**
  * チャットエンドポイント
  * HeyGen Interactive Avatar から呼び出される
  *
@@ -96,8 +177,11 @@ app.get("/health", async (_req, res) => {
 app.post("/api/chat", async (req, res) => {
   const { sessionId = "default", message } = req.body;
 
-  if (!message || typeof message !== "string") {
-    res.status(400).json({ error: "message は必須です" });
+  if (typeof message !== "string" || message.trim().length === 0) {
+    res.status(400).json({
+      error: "message is required",
+      userMessage: "メッセージを入力してください",
+    });
     return;
   }
 
@@ -191,7 +275,7 @@ app.post("/api/liveavatar/token", async (req, res) => {
 
   const { avatar_id, sandbox = false } = req.body || {};
   // デフォルト: 環境変数 or 本番Miraiアバター
-  const avatarId = avatar_id || process.env.DEFAULT_AVATAR_ID || "1fdb012b-def9-435c-a297-fb8717556d02";
+  const avatarId = avatar_id || DEFAULT_AVATAR_ID;
 
   try {
     log("info", "liveavatar_token_start", { avatarId, sandbox });
