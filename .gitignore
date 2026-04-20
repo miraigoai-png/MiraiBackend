@@ -8,7 +8,10 @@ dist/
 .cursor/
 .serena/
 .agents/
+.claude/
 agents/
 research/
+graphify-out/
+HERMES_WRITE_TEST.txt
 CLAUDE.md
 CODEX.md

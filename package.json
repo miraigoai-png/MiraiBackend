@@ -7,7 +7,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "tsx src/test-chat.ts"
+    "test": "tsx src/test-chat.ts",
+    "test:classify": "tsx src/test-classify-chat-error.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

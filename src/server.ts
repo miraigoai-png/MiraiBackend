@@ -2,22 +2,10 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { getSession, deleteSession } from "./mirai-chat";
+import { classifyChatError } from "./classify-chat-error";
 
 // shell環境変数（例: PORT=3011）を優先し、.envは未設定値のみ補完する
 dotenv.config();
-
-// アバターID定数
-// 本番Miraiアバター「mirai.go.ai」（LiveAvatar承認済、2026-04-19 ACTIVE確認）
-const PRODUCTION_AVATAR_ID = "5909689f-7a01-4027-8d33-1f5153d79b71";
-// サンドボックスアバター（Wayne、テスト常時利用可）
-const SANDBOX_AVATAR_ID_CONST = "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";
-
-const DEFAULT_AVATAR_ID = process.env.DEFAULT_AVATAR_ID || PRODUCTION_AVATAR_ID;
-const SANDBOX_AVATAR_ID = process.env.SANDBOX_AVATAR_ID || SANDBOX_AVATAR_ID_CONST;
-const USE_SANDBOX_FALLBACK = ["1", "true", "yes", "on"].includes(
-  String(process.env.USE_SANDBOX_FALLBACK || "true").toLowerCase()
-);
-const TRIAL_DURATION_SEC = Number.parseInt(process.env.TRIAL_DURATION_SEC || "0", 10) || 0;
 
 // 構造化ログユーティリティ
 function log(level: "info" | "warn" | "error", event: string, data?: Record<string, unknown>): void {
@@ -32,6 +20,20 @@ if (!process.env.ANTHROPIC_API_KEY) {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// アバターID定数
+// 本番Miraiアバター「mirai.go.ai」（LiveAvatar承認済、2026-04-19 ACTIVE確認）
+// 旧ID 1fdb012b-def9-435c-a297-fb8717556d02 は HeyGen承認時代の幽霊ID、LiveAvatar未同期で廃止
+const PRODUCTION_AVATAR_ID = "5909689f-7a01-4027-8d33-1f5153d79b71";
+// サンドボックスアバター（Wayne、テスト常時利用可）
+const SANDBOX_AVATAR_ID_FALLBACK = "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";
+
+const DEFAULT_AVATAR_ID = process.env.DEFAULT_AVATAR_ID || PRODUCTION_AVATAR_ID;
+const SANDBOX_AVATAR_ID = process.env.SANDBOX_AVATAR_ID || SANDBOX_AVATAR_ID_FALLBACK;
+const USE_SANDBOX_FALLBACK = ["1", "true", "yes", "on"].includes(
+  String(process.env.USE_SANDBOX_FALLBACK || "true").toLowerCase()
+);
+const TRIAL_DURATION_SEC = Number.parseInt(process.env.TRIAL_DURATION_SEC || "300", 10) || 300;
 
 app.use(cors());
 app.use(express.json());
@@ -106,7 +108,9 @@ app.get("/health", async (_req, res) => {
 });
 
 /**
- * フロント向け設定値
+ * フロントエンド設定取得
+ * ハードコードを避け、アバターIDやフォールバック設定を配信する
+ * GET /api/config
  */
 app.get("/api/config", (_req, res) => {
   res.json({
@@ -115,62 +119,6 @@ app.get("/api/config", (_req, res) => {
     useSandboxFallback: USE_SANDBOX_FALLBACK,
     trialDurationSec: TRIAL_DURATION_SEC,
   });
-});
-
-/**
- * LiveAvatar疎通確認
- * GET /api/liveavatar/check?avatar_id=...&sandbox=true|1
- */
-app.get("/api/liveavatar/check", async (req, res) => {
-  const apiKey = process.env.LIVEAVATAR_API_KEY;
-  const sandbox = parseSandboxQuery(req.query.sandbox);
-  const avatarIdFromQuery = typeof req.query.avatar_id === "string" ? req.query.avatar_id : "";
-  const avatarId = avatarIdFromQuery || DEFAULT_AVATAR_ID;
-
-  if (!apiKey) {
-    res.json({
-      ok: false,
-      status: 500,
-      reason: "unconfigured",
-      code: null,
-      detail: "LIVEAVATAR_API_KEY が設定されていません",
-    });
-    return;
-  }
-
-  try {
-    const endpoint = new URL("https://api.liveavatar.com/v1/avatars");
-    endpoint.searchParams.set("avatar_id", avatarId);
-    if (sandbox) {
-      endpoint.searchParams.set("is_sandbox", "true");
-    }
-
-    const response = await fetch(endpoint.toString(), {
-      headers: {
-        "X-API-KEY": apiKey,
-        "Accept": "application/json",
-      },
-    });
-
-    const payload = await response.json().catch(() => null) as any;
-    const detail = payload?.message || payload?.detail || payload;
-
-    res.json({
-      ok: response.ok,
-      status: response.status,
-      reason: response.ok ? "ok" : "http_error",
-      code: payload?.code ?? null,
-      detail,
-    });
-  } catch (error: any) {
-    res.json({
-      ok: false,
-      status: 503,
-      reason: "network_error",
-      code: null,
-      detail: error?.message || "LiveAvatar APIへの接続に失敗しました",
-    });
-  }
 });
 
 /**
@@ -186,8 +134,8 @@ app.post("/api/chat", async (req, res) => {
 
   if (typeof message !== "string" || message.trim().length === 0) {
     res.status(400).json({
-      error: "message is required",
-      userMessage: "メッセージを入力してください",
+      error: "invalid_input",
+      userMessage: "メッセージが空です。質問内容を入力してください。",
     });
     return;
   }
@@ -196,11 +144,18 @@ app.post("/api/chat", async (req, res) => {
     const session = getSession(sessionId);
     const reply = await session.chat(message);
     res.json({ reply, sessionId });
-  } catch (error: any) {
-    log("error", "chat_error", { sessionId, message: error.message });
-    res.status(500).json({
-      error: "応答の生成に失敗しました",
-      detail: error.message,
+  } catch (error: unknown) {
+    const classified = classifyChatError(error);
+    const anyErr = error as { status?: number; message?: string } | undefined;
+    log("error", "chat_error", {
+      sessionId,
+      errorCode: classified.code,
+      upstreamStatus: anyErr?.status,
+      detail: anyErr?.message,
+    });
+    res.status(classified.httpStatus).json({
+      error: classified.code,
+      userMessage: classified.userMessage,
     });
   }
 });
@@ -307,19 +262,127 @@ app.post("/api/liveavatar/token", async (req, res) => {
 
     const tokenData = await tokenRes.json() as {
       code: number;
-      data: { session_token: string; session_id: string };
+      message?: string;
+      data?: { session_token: string; session_id: string };
     };
 
     if (tokenData.code !== 100 && tokenData.code !== 1000) {
-      throw new Error(`Token creation failed: ${JSON.stringify(tokenData)}`);
+      const message = tokenData.message || "";
+      const isAvatarNotFound = /avatar not found/i.test(message);
+      log("warn", "liveavatar_token_rejected", {
+        code: tokenData.code,
+        avatarId,
+        sandbox,
+        message,
+      });
+      res.status(502).json({
+        error: "LiveAvatarトークン生成に失敗しました",
+        reason: isAvatarNotFound ? "avatar_not_found" : "token_rejected",
+        code: tokenData.code,
+        detail: message || "LiveAvatar APIがトークンを発行しませんでした",
+      });
+      return;
     }
 
-    log("info", "liveavatar_token_success", { sessionId: tokenData.data.session_id });
-    res.json({ session_token: tokenData.data.session_token });
+    log("info", "liveavatar_token_success", { sessionId: tokenData.data?.session_id, avatarId, sandbox });
+    res.json({ session_token: tokenData.data?.session_token });
   } catch (error: any) {
     log("error", "liveavatar_token_error", { message: error.message });
     res.status(500).json({
       error: "LiveAvatarトークン生成に失敗しました",
+      reason: "internal_error",
+      detail: error.message,
+    });
+  }
+});
+
+/**
+ * LiveAvatar 本番アバター状態チェック
+ *
+ * GET /api/liveavatar/check?avatar_id=<uuid>&sandbox=false
+ * - avatar_id未指定時は defaultAvatarId を使用
+ * - sandbox未指定時は false
+ */
+app.get("/api/liveavatar/check", async (req, res) => {
+  const apiKey = process.env.LIVEAVATAR_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({
+      ok: false,
+      error: "LIVEAVATAR_API_KEY が設定されていません",
+      reason: "internal_error",
+    });
+    return;
+  }
+
+  const avatarIdQuery = req.query.avatar_id;
+  const avatarId = (Array.isArray(avatarIdQuery) ? avatarIdQuery[0] : avatarIdQuery) || DEFAULT_AVATAR_ID;
+  const sandbox = parseSandboxQuery(req.query.sandbox);
+
+  try {
+    log("info", "liveavatar_check_start", { avatarId, sandbox });
+
+    const tokenRes = await fetch("https://api.liveavatar.com/v1/sessions/token", {
+      method: "POST",
+      headers: {
+        "X-API-KEY": apiKey,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        mode: "FULL",
+        avatar_id: avatarId,
+        is_sandbox: sandbox,
+        interactivity_type: "CONVERSATIONAL",
+        avatar_persona: {
+          language: "ja",
+          voice_id: "f206785d-e75f-4e8e-8afa-0d223d894d1f",
+        },
+      }),
+    });
+
+    const tokenData = await tokenRes.json() as {
+      code: number;
+      message?: string;
+      data?: { session_id?: string };
+    };
+
+    if (tokenData.code === 100 || tokenData.code === 1000) {
+      res.json({
+        ok: true,
+        status: "available",
+        avatarId,
+        sandbox,
+        code: tokenData.code,
+        detail: "LiveAvatarでこのアバターIDは利用可能です。",
+      });
+      return;
+    }
+
+    const message = tokenData.message || "";
+    const isAvatarNotFound = /avatar not found/i.test(message);
+
+    // status は available/not_found の二値に正規化。
+    // 利用不能理由は reason（avatar_not_found / token_rejected / internal_error）で伝える。
+    res.status(200).json({
+      ok: false,
+      status: "not_found",
+      avatarId,
+      sandbox,
+      reason: isAvatarNotFound ? "avatar_not_found" : "token_rejected",
+      code: tokenData.code,
+      detail: message || "LiveAvatar APIがトークンを発行しませんでした",
+      hint: isAvatarNotFound
+        ? "LiveAvatar側で未承認/未同期/別アカウントの可能性があります。"
+        : "APIキー権限・入力値・アバター状態を確認してください。",
+    });
+  } catch (error: any) {
+    log("error", "liveavatar_check_error", { message: error.message, avatarId, sandbox });
+    res.status(200).json({
+      ok: false,
+      status: "not_found",
+      avatarId,
+      sandbox,
+      reason: "internal_error",
       detail: error.message,
     });
   }
