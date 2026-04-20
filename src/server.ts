@@ -3,12 +3,19 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { getSession, deleteSession } from "./mirai-chat";
 
-dotenv.config({ override: true });
+// shell環境変数（例: PORT=3011）を優先し、.envは未設定値のみ補完する
+dotenv.config();
 
-const DEFAULT_AVATAR_ID = process.env.DEFAULT_AVATAR_ID || "1fdb012b-def9-435c-a297-fb8717556d02";
-const SANDBOX_AVATAR_ID = process.env.SANDBOX_AVATAR_ID || DEFAULT_AVATAR_ID;
+// アバターID定数
+// 本番Miraiアバター「mirai.go.ai」（LiveAvatar承認済、2026-04-19 ACTIVE確認）
+const PRODUCTION_AVATAR_ID = "5909689f-7a01-4027-8d33-1f5153d79b71";
+// サンドボックスアバター（Wayne、テスト常時利用可）
+const SANDBOX_AVATAR_ID_CONST = "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a";
+
+const DEFAULT_AVATAR_ID = process.env.DEFAULT_AVATAR_ID || PRODUCTION_AVATAR_ID;
+const SANDBOX_AVATAR_ID = process.env.SANDBOX_AVATAR_ID || SANDBOX_AVATAR_ID_CONST;
 const USE_SANDBOX_FALLBACK = ["1", "true", "yes", "on"].includes(
-  String(process.env.USE_SANDBOX_FALLBACK || "false").toLowerCase()
+  String(process.env.USE_SANDBOX_FALLBACK || "true").toLowerCase()
 );
 const TRIAL_DURATION_SEC = Number.parseInt(process.env.TRIAL_DURATION_SEC || "0", 10) || 0;
 
