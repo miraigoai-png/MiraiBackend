@@ -35,23 +35,48 @@ export class MiraiChatSession {
       this.history = this.history.slice(-MAX_CONVERSATION_HISTORY);
     }
 
-    const response = await this.client.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: MAX_TOKENS,
-      system: MIRAI_SYSTEM_PROMPT,
-      messages: this.history,
-    });
+    const fallbackModel = process.env.CLAUDE_MODEL_FALLBACK || "claude-3-5-sonnet-20241022";
+    const modelsToTry = [CLAUDE_MODEL, fallbackModel].filter(
+      (model, index, self) => model && self.indexOf(model) === index
+    );
 
-    // テキスト応答を抽出
-    const assistantMessage = response.content
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("");
+    let lastError: unknown;
+    for (let i = 0; i < modelsToTry.length; i++) {
+      const model = modelsToTry[i];
+      try {
+        const response = await this.client.messages.create({
+          model,
+          max_tokens: MAX_TOKENS,
+          system: MIRAI_SYSTEM_PROMPT,
+          messages: this.history,
+        });
 
-    // 会話履歴にアシスタント応答を追加
-    this.history.push({ role: "assistant", content: assistantMessage });
+        // テキスト応答を抽出
+        const assistantMessage = response.content
+          .filter((block) => block.type === "text")
+          .map((block) => block.text)
+          .join("");
 
-    return assistantMessage;
+        // 会話履歴にアシスタント応答を追加
+        this.history.push({ role: "assistant", content: assistantMessage });
+
+        return assistantMessage;
+      } catch (error) {
+        lastError = error;
+        const anyErr = error as { status?: number; message?: string } | undefined;
+        const message = anyErr?.message || "";
+        const canRetryWithFallback =
+          i < modelsToTry.length - 1 &&
+          anyErr?.status === 400 &&
+          /(invalid_request|model|not found|unsupported)/i.test(message);
+
+        if (!canRetryWithFallback) {
+          throw error;
+        }
+      }
+    }
+
+    throw lastError;
   }
 
   /**
