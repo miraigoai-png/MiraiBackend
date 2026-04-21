@@ -164,8 +164,11 @@ export const MAX_CONVERSATION_HISTORY = 20;
 
 /**
  * Claude APIのモデル設定
+ * 環境変数 CLAUDE_MODEL で上書き可能。既定は現行世代 Sonnet 4.6。
+ * 旧 "claude-sonnet-4-20250514" は2026年に retired。互換のため env で指定すれば使えるが
+ * Anthropic が 400 invalid_request_error で拒否するリスクがある。
  */
-export const CLAUDE_MODEL = "claude-sonnet-4-20250514";
+export const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-4-6";
 
 /**
  * 最大トークン数（応答の長さ制限）

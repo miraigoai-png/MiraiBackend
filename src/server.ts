@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { getSession, deleteSession } from "./mirai-chat";
 import { classifyChatError } from "./classify-chat-error";
+import { CLAUDE_MODEL } from "./mirai-prompt";
 
 // shell環境変数（例: PORT=3011）を優先し、.envは未設定値のみ補完する
 dotenv.config();
@@ -389,5 +390,5 @@ app.get("/api/liveavatar/check", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  log("info", "server_started", { port: PORT, model: "claude-sonnet-4-20250514" });
+  log("info", "server_started", { port: PORT, model: CLAUDE_MODEL });
 });

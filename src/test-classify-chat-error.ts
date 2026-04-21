@@ -66,6 +66,19 @@ const cases: TestCase[] = [
     input: { status: 400, message: "invalid_request_error" },
     expected: { code: "invalid_request", httpStatus: 400 },
   },
+  {
+    name: "クレジット残高不足 → billing_error (503, 2026-04-21 再現例)",
+    input: {
+      status: 400,
+      message: "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"}}",
+    },
+    expected: { code: "billing_error", httpStatus: 503 },
+  },
+  {
+    name: "モデル不明 → model_unavailable (503)",
+    input: { status: 400, message: "model: claude-sonnet-4-20250514 is not a valid model id" },
+    expected: { code: "model_unavailable", httpStatus: 503 },
+  },
 ];
 
 let pass = 0;

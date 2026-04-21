@@ -14,6 +14,23 @@ export function classifyChatError(error: unknown): ChatErrorClassification {
   const status = anyErr?.status;
   const message = anyErr?.message || "";
 
+  // Anthropic が 400 で返す「クレジット残高不足」は課金ブロッカーであり
+  // ユーザー起因のリクエスト不正ではない。UI向け文言と httpStatus を独立させる。
+  if (/credit balance is too low|billing|plans & billing/i.test(message)) {
+    return {
+      code: "billing_error",
+      userMessage: "AIサービスが一時的に停止しています。運営にお問い合わせください。",
+      httpStatus: 503,
+    };
+  }
+  // 存在しない/廃止されたモデルIDを Anthropic が 400 で拒否するケース
+  if (/model:.*not.*found|invalid.*model|unknown model|not.*a valid model/i.test(message)) {
+    return {
+      code: "model_unavailable",
+      userMessage: "AIモデル設定に問題があります。運営にお問い合わせください。",
+      httpStatus: 503,
+    };
+  }
   if (status === 400 || /invalid_request_error/i.test(message)) {
     return {
       code: "invalid_request",
